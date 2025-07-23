@@ -133,6 +133,7 @@ local myPrompt = vPrompt:Create({
     -- Use the mouse wheel (SCROLLUP/SCROLLDOWN) to switch options
     -- These key names can be changed in `vprompt.lua` if required
 
+
     drawDistance = 4.0,         -- The distance from the coords / entity / bone before the prompt is drawn
     interactDistance = 2.0,     -- The distance from the coords / entity / bone before the player can interact    
     font = 0,                   -- the font to be used
