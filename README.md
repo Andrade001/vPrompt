@@ -73,6 +73,7 @@ local myPrompt = vPrompt:Create({
     }
 })
 ```
+All options appear under the prompt. Use the mouse wheel to switch between them – the current option is prefixed with `>`.
 
 Create prompt for entity:
 ```lua
@@ -128,6 +129,11 @@ local myPrompt = vPrompt:Create({
         { label = 'Option 1', onInteract = function() end },
         { label = 'Option 2', onInteract = function() end }
     },
+
+    -- Use the mouse wheel (SCROLLUP/SCROLLDOWN) to switch options
+    -- These key names can be changed in `vprompt.lua` if required
+
+
     drawDistance = 4.0,         -- The distance from the coords / entity / bone before the prompt is drawn
     interactDistance = 2.0,     -- The distance from the coords / entity / bone before the player can interact    
     font = 0,                   -- the font to be used
