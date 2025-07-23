@@ -88,6 +88,13 @@ function vPrompt:_Init(cfg)
     -- Merge user-defined options
     self.cfg = mergeTables(defaultConfig, cfg)   
 
+    if cfg.options then
+        assert(type(cfg.options) == "table" and #cfg.options > 0, "^1Option "options" must be a non-empty table")
+        self.options = cfg.options
+        self.optionIndex = 1
+        cfg.label = cfg.options[1].label or cfg.label
+    end
+
     self.cfg.key = Keys[cfg.key]
     self.cfg.keyLabel = tostring(cfg.key)
     self.cfg.label = tostring(cfg.label)
@@ -272,6 +279,50 @@ end
 ------
 function vPrompt:SetCoords(coords)
     self.cfg.coords = type(coords) == 'table' and vec3(coords.x, coords.y, coords.z) or coords
+end
+
+
+------
+--
+-- Sets the current option index
+--
+-- @param index integer - option index
+--
+-- @return void
+--
+------
+function vPrompt:SetOption(index)
+    if not self.options then return end
+    if index < 1 or index > #self.options then return end
+    if self.optionIndex ~= index then
+        self.optionIndex = index
+        self.cfg.label = tostring(self.options[index].label)
+        self:Update()
+        if self.cfg.callbacks.optionChange then
+            self.cfg.callbacks.optionChange(index, self.options[index])
+        end
+    end
+end
+
+------
+--
+-- Cycles option index by offset
+--
+-- @param offset integer
+--
+-- @return void
+--
+------
+function vPrompt:_CycleOption(offset)
+    if not self.options then return end
+    local count = #self.options
+    local newIndex = self.optionIndex + offset
+    if newIndex < 1 then
+        newIndex = count
+    elseif newIndex > count then
+        newIndex = 1
+    end
+    self:SetOption(newIndex)
 end
 
 ------
@@ -485,6 +536,15 @@ function vPrompt:_CreateThread()
 
                         self.canInteract = true
 
+                        -- Cycle options using scroll wheel
+                        if self.options then
+                            if IsControlJustPressed(0, Keys["SCROLLUP"]) then
+                                self:_CycleOption(-1)
+                            elseif IsControlJustPressed(0, Keys["SCROLLDOWN"]) then
+                                self:_CycleOption(1)
+                            end
+                        end
+
                         -- Detect keypress
                         if IsControlJustPressed(0, self.cfg.key) then
                             self.pressed = true
@@ -492,9 +552,17 @@ function vPrompt:_CreateThread()
                             local canInteract = self.cfg.canInteract()
 
                             if canInteract then
+                                -- Fire per-option callback
+                                if self.options then
+                                    local opt = self.options[self.optionIndex]
+                                    if opt.onInteract then
+                                        opt.onInteract(dist, pcoords)
+                                    end
+                                end
+
                                 -- Fire 'interact' event
                                 if self.cfg.callbacks.interact then
-                                    self.cfg.callbacks.interact(dist, pcoords)
+                                    self.cfg.callbacks.interact(dist, pcoords, self.optionIndex, self.options and self.options[self.optionIndex])
                                 end
                             end
                         end
