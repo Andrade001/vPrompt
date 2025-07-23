@@ -6,7 +6,8 @@ local Keys = {
     ["LEFTSHIFT"] = 21, ["Z"] = 20, ["X"] = 73, ["C"] = 26, ["V"] = 0, ["B"] = 29, ["N"] = 249, ["M"] = 244, [","] = 82, ["."] = 81,
     ["LEFTCTRL"] = 36, ["LEFTALT"] = 19, ["SPACE"] = 22, ["RIGHTCTRL"] = 70,
     ["HOME"] = 213, ["PAGEUP"] = 10, ["PAGEDOWN"] = 11, ["DELETE"] = 178,
-    ["LEFT"] = 174, ["RIGHT"] = 175, ["UP"] = 27, ["DOWN"] = 173
+    ["LEFT"] = 174, ["RIGHT"] = 175, ["UP"] = 27, ["DOWN"] = 173,
+    ["SCROLLUP"] = 14, ["SCROLLDOWN"] = 15
 }
 
 local function mergeTables(t1, t2)
@@ -87,6 +88,19 @@ function vPrompt:_Init(cfg)
 
     -- Merge user-defined options
     self.cfg = mergeTables(defaultConfig, cfg)   
+
+    if cfg.options then
+        assert(type(cfg.options) == "table" and next(cfg.options) ~= nil, "^1Option 'options' must be a non-empty table")
+        self.options = {}
+        for i, opt in ipairs(cfg.options) do
+            if type(opt) == 'table' then
+                table.insert(self.options, opt)
+            end
+        end
+        assert(#self.options > 0, "^1Option 'options' must contain at least one option table")
+        self.optionIndex = 1
+        cfg.label = self.options[1].label or cfg.label
+    end
 
     self.cfg.key = Keys[cfg.key]
     self.cfg.keyLabel = tostring(cfg.key)
@@ -274,6 +288,50 @@ function vPrompt:SetCoords(coords)
     self.cfg.coords = type(coords) == 'table' and vec3(coords.x, coords.y, coords.z) or coords
 end
 
+
+------
+--
+-- Sets the current option index
+--
+-- @param index integer - option index
+--
+-- @return void
+--
+------
+function vPrompt:SetOption(index)
+    if not self.options then return end
+    if index < 1 or index > #self.options then return end
+    if self.optionIndex ~= index then
+        self.optionIndex = index
+        self.cfg.label = tostring(self.options[index].label)
+        self:Update()
+        if self.cfg.callbacks.optionChange then
+            self.cfg.callbacks.optionChange(index, self.options[index])
+        end
+    end
+end
+
+------
+--
+-- Cycles option index by offset
+--
+-- @param offset integer
+--
+-- @return void
+--
+------
+function vPrompt:_CycleOption(offset)
+    if not self.options then return end
+    local count = #self.options
+    local newIndex = self.optionIndex + offset
+    if newIndex < 1 then
+        newIndex = count
+    elseif newIndex > count then
+        newIndex = 1
+    end
+    self:SetOption(newIndex)
+end
+
 ------
 --
 -- Destroys the instance
@@ -320,8 +378,16 @@ function vPrompt:_GetDimensions()
     -- Get width of button
     self.keyTextWidth = self:_GetTextWidth(self.cfg.keyLabel) 
 
-    -- Get width of background box
-    self.labelTextWidth = self:_GetTextWidth(self.cfg.label) 
+    -- Get width of background box (longest option label if multiple)
+    self.labelTextWidth = self:_GetTextWidth(self.cfg.label)
+    if self.options then
+        for i, opt in ipairs(self.options) do
+            local w = self:_GetTextWidth(opt.label)
+            if w > self.labelTextWidth then
+                self.labelTextWidth = w
+            end
+        end
+    end
     
     -- Get the font height
     self.textHeight = GetRenderedCharacterHeight(self.cfg.scale, self.cfg.font)
@@ -354,25 +420,35 @@ function vPrompt:_SetBackground()
     self.minWidth = self.button.w + (self.boxPadding.x * 2)
     self.maxWidth = self.labelTextWidth + self.button.w + (self.boxPadding.x * 3) + (self.cfg.margin * 2)
 
+    local lines = self.options and #self.options or 1
+
     self.background = {
         w = self.maxWidth,
-        h = self.button.h + (self.boxPadding.y * 2),
+        h = (self.button.h * lines) + (self.boxPadding.y * 2),
         bc = self.cfg.backgroundColor,
-        fc = self.cfg.labelColor    
+        fc = self.cfg.labelColor
     }
 
     self.button.x = self.cfg.origin.x - (self.background.w / 2) + (self.button.w / 2) + self.boxPadding.x
-    self.button.y = self.cfg.origin.y - (self.background.h / 2) + (self.button.h / 2) + self.boxPadding.y 
-    
+    self.button.y = self.cfg.origin.y - (self.background.h / 2) + (self.button.h / 2) + self.boxPadding.y
+
     self.button.text = {
         x = self.button.x,
         y = self.button.y - self.textHeight + self.cfg.textOffset
     }
-    
+
     self.background.text = {
         x = self.button.x + (self.button.w / 2) + self.cfg.margin + self.boxPadding.x,
         y = self.button.y - self.textHeight + self.cfg.textOffset
     }
+
+    self.optionTextPos = {}
+    for i = 1, lines do
+        self.optionTextPos[i] = {
+            x = self.background.text.x,
+            y = self.background.text.y + (self.button.h * (i - 1))
+        }
+    end
 
     -- Default to collapsed
     if self.cfg.drawDistance > self.cfg.interactDistance then
@@ -403,8 +479,24 @@ function vPrompt:_Draw()
     btn.x = self.cfg.origin.x - (bg.w / 2) + (btn.w / 2) + self.boxPadding.x
     btn.text.x = btn.x
 
-    -- Render the boxes and text
-    self:_RenderElement(self.cfg.label, bg)
+    -- Render the background box without text
+    self:_RenderElement('', bg)
+
+    if self.options then
+        for i, opt in ipairs(self.options) do
+            local label = opt.label
+            if i == self.optionIndex then
+                label = '> ' .. label
+            else
+                label = '  ' .. label
+            end
+            local pos = self.optionTextPos[i] or self.background.text
+            self:_RenderText(label, pos, bg.fc)
+        end
+    else
+        self:_RenderText(self.cfg.label, self.background.text, bg.fc)
+    end
+
     self:_RenderElement(self.cfg.keyLabel, btn, true)
 
     -- Draw keypress effect
@@ -485,6 +577,18 @@ function vPrompt:_CreateThread()
 
                         self.canInteract = true
 
+                        -- Cycle options using scroll wheel
+                        if self.options then
+                            DisableControlAction(0, Keys["SCROLLUP"], true)
+                            DisableControlAction(0, Keys["SCROLLDOWN"], true)
+
+                            if IsControlJustPressed(0, Keys["SCROLLUP"]) then
+                                self:_CycleOption(-1)
+                            elseif IsControlJustPressed(0, Keys["SCROLLDOWN"]) then
+                                self:_CycleOption(1)
+                            end
+                        end
+
                         -- Detect keypress
                         if IsControlJustPressed(0, self.cfg.key) then
                             self.pressed = true
@@ -492,9 +596,17 @@ function vPrompt:_CreateThread()
                             local canInteract = self.cfg.canInteract()
 
                             if canInteract then
+                                -- Fire per-option callback
+                                if self.options then
+                                    local opt = self.options[self.optionIndex]
+                                    if opt.onInteract then
+                                        opt.onInteract(dist, pcoords)
+                                    end
+                                end
+
                                 -- Fire 'interact' event
                                 if self.cfg.callbacks.interact then
-                                    self.cfg.callbacks.interact(dist, pcoords)
+                                    self.cfg.callbacks.interact(dist, pcoords, self.optionIndex, self.options and self.options[self.optionIndex])
                                 end
                             end
                         end
@@ -576,5 +688,16 @@ function vPrompt:_RenderElement(text, box, centered)
     SetDrawOrigin(self.cfg.coords.x, self.cfg.coords.y, self.cfg.coords.z, 0)
     EndTextCommandDisplayText(box.text.x, box.text.y)
     DrawRect(box.x, box.y, box.w, box.h, box.bc.r, box.bc.g, box.bc.b, box.bc.a)
+    ClearDrawOrigin()
+end
+
+function vPrompt:_RenderText(text, pos, fc)
+    SetTextScale(self.cfg.scale, self.cfg.scale)
+    SetTextFont(self.cfg.font)
+    SetTextColour(fc.r, fc.g, fc.b, fc.a)
+    SetTextEntry("STRING")
+    AddTextComponentString(text)
+    SetDrawOrigin(self.cfg.coords.x, self.cfg.coords.y, self.cfg.coords.z, 0)
+    EndTextCommandDisplayText(pos.x, pos.y)
     ClearDrawOrigin()
 end
