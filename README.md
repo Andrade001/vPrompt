@@ -58,6 +58,22 @@ local myPrompt = vPrompt:Create({
 })
 ```
 
+Create prompt with multiple options:
+```lua
+local myPrompt = vPrompt:Create({
+    key = "E",
+    coords = vector3(-311.05, -1535.51, 27.90),
+    options = {
+        { label = "Search Bin", onInteract = function()
+            -- your code here
+        end },
+        { label = "Destroy Bin", onInteract = function()
+            -- your code here
+        end }
+    }
+})
+```
+
 Create prompt for entity:
 ```lua
 local player = PlayerPedId()
@@ -108,6 +124,10 @@ local myPrompt = vPrompt:Create({
 local myPrompt = vPrompt:Create({
     key = 'E',                  -- the key to be pressed
     label = 'Press Me',         -- the label
+    options = {                 -- optional table of selectable options
+        { label = 'Option 1', onInteract = function() end },
+        { label = 'Option 2', onInteract = function() end }
+    },
     drawDistance = 4.0,         -- The distance from the coords / entity / bone before the prompt is drawn
     interactDistance = 2.0,     -- The distance from the coords / entity / bone before the player can interact    
     font = 0,                   -- the font to be used
@@ -157,6 +177,10 @@ end)
 myPrompt:On('hide', function()
     -- Do something when the prompt gets hidden
 end)
+
+myPrompt:On('optionChange', function(index, option)
+    -- Called when the selected option changes
+end)
 ```
 
 ---
@@ -183,6 +207,13 @@ myPrompt:SetKey(
 ```lua
 myPrompt:SetLabel(
     label --[[ string ]]
+)
+```
+
+#### Change the selected option
+```lua
+myPrompt:SetOption(
+    index --[[ integer ]]
 )
 ```
 
